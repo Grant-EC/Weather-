@@ -90,16 +90,13 @@ df_pred.columns = ["actual"]
 df_pred = df_pred[WINDOW:]  # align
 df_pred["predicted"] = pred
 
-# Plot Validation and Test Predictions 
-fig, axes = plt.subplots(2, 1, figsize=(14, 8), dpi=400)
+# Plot Test Predictions 
+fig, axes = plt.subplots(2, 1, figsize=(7, 4), dpi=200)
 
-plt.subplot(2, 1, 1)
-plt.title("Validation Results")
-sns.lineplot(data=df_pred[train_size:], palette="flare", alpha=0.8)
 
-plt.subplot(2, 1, 2)
+plt.subplot(1, 1, 1)
 plt.title("Test Results")
-sns.lineplot(data=df_pred[train_size+val_size:], palette="flare", alpha=0.8)
+sns.lineplot(data=df_pred[train_size+val_size:], palette="flare", alpha=1.0)
 
 plt.tight_layout()
 plt.show()
@@ -114,3 +111,4 @@ except PermissionError:
     alt_path = rf"C:\Users\GECross\Downloads\temperature_predictions_{timestamp}.csv"
     df_pred.to_csv(alt_path, index=False)
     os.startfile(alt_path)
+
