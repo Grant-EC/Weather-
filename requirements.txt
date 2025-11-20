@@ -1,0 +1,28 @@
+# List of all requirements for this repo
+# Create virtual environment if you haven't already
+# 1. Create virtual environment (if you haven't already
+# Linux / macOS
+# python3 -m venv .venv
+
+# Windows (Command Prompt or PowerShell)
+# python -m venv .venv
+
+# 2. Activate virtual environment
+# Linux / macOS
+# source .venv/bin/activate
+
+# Windows (Command Prompt or PowerShell)
+#.venv\Scripts\activate
+
+# 2. Install dependencies (from root directory of repo)
+# pip install -r requirements.txt
+
+# 3. When done with your repo/virtual environment,
+# don't forget to use the 'deactivate' command!!!
+
+# NOTE: If you have certain dependency versions you need,
+# you can use something like matplotlib=3.10.7 
+# You may also find it useful to have multiple requirements
+# files for different systems (one for linux and one for Windows)
+
+numpy
