@@ -16,6 +16,12 @@
 
 # 2. Install dependencies (from root directory of repo)
 # pip install -r requirements.txt
+pip install pandas
+pip install numpy
+pip install tensorflow
+pip install scikit-learn
+pip install matplotlib
+pip install seaborn
 
 #3. Install the dataset from https://www.kaggle.com/datasets/abdelrahman16/weather-seattle/data or follow readme for steps from command line
 
