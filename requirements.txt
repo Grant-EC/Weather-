@@ -17,7 +17,13 @@
 # 2. Install dependencies (from root directory of repo)
 # pip install -r requirements.txt
 
-# 3. When done with your repo/virtual environment,
+#3. Install the dataset from https://www.kaggle.com/datasets/abdelrahman16/weather-seattle/data or follow readme for steps from command line
+
+#4. Run the train.py file first to train the model
+
+#5. Run RNN_Seattle.py to get results
+
+# 6. When done with your repo/virtual environment,
 # don't forget to use the 'deactivate' command!!!
 
 # NOTE: If you have certain dependency versions you need,
