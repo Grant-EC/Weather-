@@ -18,7 +18,7 @@ df = pd.read_csv(r'C:\Users\GECross\Downloads\seattle-weather.csv')
 print(df.head())
 
 #Select Target Column 
-target = df.iloc[:, 2:3].values  # shape (N,1)
+target = df[["temp_max", "temp_min"]].values
 
 # Scale data 
 scaler = MinMaxScaler()
@@ -28,10 +28,9 @@ target_scaled = scaler.fit_transform(target)
 def make_sequences(data, window=10):
     X, y = [], []
     for i in range(window, len(data)):
-        X.append(data[i-window:i, 0])
-        y.append(data[i, 0])
+        X.append(data[i-window:i])
+        y.append(data[i])
     return np.array(X), np.array(y)
-
 WINDOW = 10
 X, y = make_sequences(target_scaled, WINDOW)
 print("Total samples:", len(X))
@@ -45,10 +44,9 @@ X_val,  y_val  = X[train_size:train_size+val_size], y[train_size:train_size+val_
 X_test, y_test = X[train_size+val_size:], y[train_size+val_size:]
 
 # Reshape for LSTM
-X_train = X_train.reshape((-1, WINDOW, 1))
-X_val   = X_val.reshape((-1, WINDOW, 1))
-X_test  = X_test.reshape((-1, WINDOW, 1))
-
+X_train = X_train.reshape((-1, WINDOW, 2))
+X_val   = X_val.reshape((-1, WINDOW, 2))
+X_test  = X_test.reshape((-1, WINDOW, 2))
 # Load trained model
 model_path = r"C:\Users\GECross\Downloads\weather_lstm_model.h5"
 if not os.path.exists(model_path):
@@ -59,18 +57,18 @@ regressor.compile(optimizer='adam', loss='mean_squared_error')
 print("Model loaded successfully.")
 
 # Make predictions
-train_pred_scaled = regressor.predict(X_train).flatten()
-val_pred_scaled   = regressor.predict(X_val).flatten()
-test_pred_scaled  = regressor.predict(X_test).flatten()
+train_pred_scaled = regressor.predict(X_train)   # shape (n, 2)
+val_pred_scaled   = regressor.predict(X_val)
+test_pred_scaled  = regressor.predict(X_test)
 
 # Inverse transform to real temperatures
-train_pred = scaler.inverse_transform(train_pred_scaled.reshape(-1, 1)).flatten()
-val_pred   = scaler.inverse_transform(val_pred_scaled.reshape(-1, 1)).flatten()
-test_pred  = scaler.inverse_transform(test_pred_scaled.reshape(-1, 1)).flatten()
+train_pred = scaler.inverse_transform(train_pred_scaled)
+val_pred   = scaler.inverse_transform(val_pred_scaled)
+test_pred  = scaler.inverse_transform(test_pred_scaled)
 
-y_train_real = scaler.inverse_transform(y_train.reshape(-1, 1)).flatten()
-y_val_real   = scaler.inverse_transform(y_val.reshape(-1, 1)).flatten()
-y_test_real  = scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
+y_train_real = scaler.inverse_transform(y_train)
+y_val_real   = scaler.inverse_transform(y_val)
+y_test_real  = scaler.inverse_transform(y_test)
 
 # Metrics Function 
 def print_metrics(y_true, y_pred, name="Data"):
@@ -85,22 +83,35 @@ print_metrics(y_test_real,  test_pred,  "Test")
 
 # Prepare DataFrame for plotting
 pred = np.concatenate([train_pred, val_pred, test_pred])
-df_pred = pd.DataFrame(df["temp_max"].copy())
-df_pred.columns = ["actual"]
-df_pred = df_pred[WINDOW:]  # align
-df_pred["predicted"] = pred
 
-# Plot Test Predictions 
-fig, axes = plt.subplots(2, 1, figsize=(7, 4), dpi=200)
+df_pred = pd.DataFrame({
+    "actual_max": df["temp_max"][WINDOW:].values,
+    "actual_min": df["temp_min"][WINDOW:].values,
+    "pred_max": pred[:, 0],
+    "pred_min": pred[:, 1],
+})
+
+# Add date column
+df_pred["date"] = pd.to_datetime(df["date"][WINDOW:].values)
+
+# Slice test range only
+df_plot = df_pred.iloc[train_size + val_size:].copy()
 
 
-plt.subplot(1, 1, 1)
+plt.figure(figsize=(12,6))
 plt.title("Test Results")
-sns.lineplot(data=df_pred[train_size+val_size:], palette="flare", alpha=1.0)
 
+plt.plot(df_plot["date"], df_plot["actual_max"], label="actual_max")
+plt.plot(df_plot["date"], df_plot["actual_min"], label="actual_min")
+plt.plot(df_plot["date"], df_plot["pred_max"],   label="pred_max")
+plt.plot(df_plot["date"], df_plot["pred_min"],   label="pred_min")
+
+plt.xticks(rotation=45)
+plt.xlabel("Date")
+plt.ylabel("Temperature (°C)")
+plt.legend()
 plt.tight_layout()
 plt.show()
-
 # Save predictions
 try:
     save_path = r"C:\Users\GECross\Downloads\temperature_predictions.csv"
@@ -111,4 +122,3 @@ except PermissionError:
     alt_path = rf"C:\Users\GECross\Downloads\temperature_predictions_{timestamp}.csv"
     df_pred.to_csv(alt_path, index=False)
     os.startfile(alt_path)
-
