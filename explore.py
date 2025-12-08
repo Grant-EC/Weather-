@@ -1,100 +1,74 @@
-#This was included code from where I originally found the dataset
-
-# ==============================
-# Weather Data Analysis Script
-# ==============================
-
-# Import libraries
-import numpy as np
+# Imports
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
+import numpy as np
 
-# ==============================
-# 1. Load and inspect data
-# ==============================
+from keras.models import Sequential
+from keras.layers import LSTM, Dense, Dropout
 
-# Use raw string or forward slashes to avoid Unicode errors
-data_path = r'C:\Users\GECross\Downloads\seattle-weather.csv' #specific for where it is saved in my device
-df = pd.read_csv(data_path)
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
 
-print("\n--- Data Overview ---")
-print(df.info())
-print("\nMissing values:\n", df.isna().sum())
+# Load Dataset
+df = pd.read_csv(r'C:\Users\GECross\Downloads\seattle-weather.csv')
+print(df.head())
+print("Missing values:\n", df.isnull().sum())
+print("Duplicate rows:", df.duplicated().sum())
 
-# ==============================
-# 2. Clean and preprocess data
-# ==============================
+# Select Target Feature 
+target = df[["temp_max", "temp_min"]].values 
 
-# Convert 'date' to datetime
-df['date'] = pd.to_datetime(df['date'])
+# Scale Data
+scaler = MinMaxScaler()
+target_scaled = scaler.fit_transform(target)
 
-# Drop rows with missing values
-df.dropna(inplace=True)
+# Sequence Generator
+def make_sequences(data, window=10):
+    X, y = [], []
+    for i in range(window, len(data)):
+        X.append(data[i-window:i])  # window × 2 features
+        y.append(data[i])           # 2 outputs
+    return np.array(X), np.array(y)
 
-# Sort by date (in place)
-df.sort_values(by="date", inplace=True)
+WINDOW = 10
+X, y = make_sequences(target_scaled, WINDOW)
 
-# ==============================
-# 3. Exploratory Data Analysis
-# ==============================
+print("Total sequences created:", len(X))
 
-# Numerical and categorical summary
-print("\n--- Numerical Summary ---")
-print(df.describe())
-print("\n--- Categorical Summary ---")
-print(df.describe(include='object'))
+# Train/Val/Test Split
+train_size = int(len(X) * 0.7)
+val_size = int(len(X) * 0.15)
 
-# ==============================
-# 4. Matplotlib & Seaborn Plots
-# ==============================
+X_train, y_train = X[:train_size], y[:train_size]
+X_val, y_val = X[train_size:train_size+val_size], y[train_size:train_size+val_size]
+X_test, y_test = X[train_size+val_size:], y[train_size+val_size:]
 
-# Scatter plot: precipitation vs temperature
-plt.figure(figsize=(6,4))
-plt.scatter(df["precipitation"], df["temp_max"], color="red", alpha=0.6)
-plt.xlabel("Precipitation")
-plt.ylabel("Max Temperature")
-plt.title("Precipitation vs Max Temperature")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+# Reshape for LSTM 
+X_train = X_train.reshape((-1, WINDOW, 2))
+X_val   = X_val.reshape((-1, WINDOW, 2))
+X_test  = X_test.reshape((-1, WINDOW, 2))
 
-# Pie chart: weather frequency
-weather_counts = df['weather'].value_counts()
-plt.figure(figsize=(6,6))
-plt.pie(weather_counts, labels=weather_counts.index, autopct='%1.1f%%', startangle=90)
-plt.title("Weather Distribution")
-plt.tight_layout()
-plt.show()
+# Build Model
+model = Sequential()
 
-# Heatmap of top 10 weathers (averages)
-top_weather = df.groupby('weather')[['precipitation', 'temp_max', 'temp_min', 'wind']].mean().nlargest(10, 'temp_max')
-plt.figure(figsize=(10,6))
-sns.heatmap(top_weather, annot=True, cmap='coolwarm', fmt=".2f")
-plt.title("Average Weather Metrics (Top 10 by Temp Max)")
-plt.tight_layout()
-plt.show()
+model.add(LSTM(50, return_sequences=True, input_shape=(WINDOW, 2)))
+model.add(Dropout(0.2))
 
-# ==============================
-# 5. Plotly Visualizations
-# ==============================
+model.add(LSTM(50))  # final LSTM layer
+model.add(Dropout(0.2))
 
-# Interactive histogram
-fig = px.histogram(df, x="wind", template='plotly', title='Wind Distribution',
-                   text_auto=True, opacity=0.8)
-fig.update_layout(bargap=0.3)
-fig.show()
+model.add(Dense(2))  # output
 
-# Interactive pie chart (top 10 weather types by temp_max)
-top_weather_pie = top_weather.reset_index()
-fig = go.Figure(data=[go.Pie(
-    labels=top_weather_pie['weather'],
-    values=top_weather_pie['temp_max'],
-    textinfo='label+percent',
-    hole=0.3,
-    pull=[0.1 if i == 0 else 0 for i in range(len(top_weather_pie))]
-)])
-fig.update_layout(title_text='Top 10 Weather Types by Max Temperature')
-fig.show()
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Train Model
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    epochs=20,
+    batch_size=5
+)
+
+# Save Model
+model_path = r"C:\Users\GECross\Downloads\weather_lstm_model.h5"
+model.save(model_path)
+print(f"Model saved to: {model_path}")
