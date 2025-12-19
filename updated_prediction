@@ -1,0 +1,149 @@
+import numpy as np
+import pandas as pd
+from keras.models import load_model
+from sklearn.preprocessing import MinMaxScaler
+import datetime
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+
+# 1. LOAD DATA
+
+
+df = pd.read_csv(r"C:\Users\GECross\Downloads\seattle-weather.csv")
+df['date'] = pd.to_datetime(df['date'])
+
+df['month'] = df['date'].dt.month
+df['day'] = df['date'].dt.day
+
+temps = df[["temp_max", "temp_min"]].values
+
+df['day_of_year'] = df['date'].dt.dayofyear
+df['sin_day'] = np.sin(2 * np.pi * df['day_of_year'] / 365.0)
+df['cos_day'] = np.cos(2 * np.pi * df['day_of_year'] / 365.0)
+
+features = df[['temp_max', 'temp_min', 'sin_day', 'cos_day']].values
+temp_scaler = MinMaxScaler()
+temp_scaler.fit(df[['temp_max', 'temp_min']])
+
+feature_scaler = MinMaxScaler()
+features_scaled = feature_scaler.fit_transform(features)
+
+# Scale temps
+scaler = MinMaxScaler()
+temps_scaled = scaler.fit_transform(temps)
+features_scaled = scaler.fit_transform(features)
+
+# 2. LOAD MODEL
+
+WINDOW = 30
+model_path = r"C:\Users\GECross\Downloads\new_weather_lstm_model.h5"
+
+model = load_model(model_path, compile=False)
+
+print("Model loaded successfully!")
+
+
+# 3. FUNCTION — GET HISTORICAL WINDOW
+
+def get_historical_window(target_month, target_day, window=30):
+    matching = df[(df['month'] == target_month) & (df['day'] == target_day)]
+
+    if len(matching) == 0:
+        raise ValueError("No matching date found")
+
+    idx = matching.index[-1]
+
+    if idx < window:
+        raise ValueError("Not enough historical data")
+
+    return features_scaled[idx-window:idx]
+
+# 4. PREDICT A 10-DAY PERIOD
+
+
+def predict_future_period(year, month, day):
+    """
+    Predicts a single 2-value output (max/min) for each of the next 10 days.
+    """
+
+    window_scaled = get_historical_window(month, day, WINDOW)
+
+    X_input = window_scaled.reshape(1, WINDOW, 4)
+
+    # Your model outputs only *one day* at a time → so we roll it forward
+    predictions_scaled = []
+
+    current = X_input.copy()
+
+    for _ in range(30):
+        pred = model.predict(current)[0]  # shape (2,)
+        predictions_scaled.append(pred)
+
+        # update rolling window
+        last_sin_cos = current[0][-1, 2:]   # keep sin_day, cos_day
+        full_pred = np.hstack([pred, last_sin_cos])
+
+        new_seq = np.vstack([current[0][1:], full_pred])
+        current = new_seq.reshape(1, WINDOW, 4)
+        current = new_seq.reshape(1, WINDOW, 4)
+
+    predictions_scaled = np.array(predictions_scaled)
+
+    # Unscale
+    predictions = temp_scaler.inverse_transform(predictions_scaled)
+
+    # Build date range
+    start_date = datetime.date(year, month, day)
+    dates = [start_date + datetime.timedelta(days=i) for i in range(30)]
+
+    forecast_df = pd.DataFrame({
+        "date": dates,
+        "pred_temp_max": predictions[:, 0],
+        "pred_temp_min": predictions[:, 1]
+    })
+
+    return forecast_df
+
+
+
+# 5. RUN FORECAST
+
+
+future_year = 2025
+future_month = 11
+future_day = 1
+
+forecast = predict_future_period(future_year, future_month, future_day)
+print(forecast)
+
+
+# 6. SAVE CSV
+
+
+csv_path = r"C:\Users\GECross\Downloads\forecast_output.csv"
+forecast.to_csv(csv_path, index=False)
+print(f"\nForecast saved to {csv_path}")
+
+
+# 7. PLOT
+
+
+plt.figure(figsize=(12, 6))
+
+plt.plot(forecast["date"], forecast["pred_temp_max"], marker="o", label="Predicted Max Temp")
+plt.plot(forecast["date"], forecast["pred_temp_min"], marker="o", label="Predicted Min Temp")
+
+plt.title("30-Day Temperature Forecast")
+plt.xlabel("Date")
+plt.ylabel("Temperature (°F)")
+plt.grid(True)
+plt.legend()
+
+# Format date axis
+plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1))
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+plt.xticks(rotation=45)
+
+plt.tight_layout()
+plt.show()
