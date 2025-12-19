@@ -1,0 +1,75 @@
+import pandas as pd
+import numpy as np
+
+# Load Dataset
+df = pd.read_csv(r'C:\Users\GECross\Downloads\seattle-weather.csv')
+
+# Ensure datetime
+df['date'] = pd.to_datetime(df['date'])
+
+# === Add Seasonal Features ===
+df['day_of_year'] = df['date'].dt.dayofyear
+
+# Cyclic Encodings for yearly seasonality
+df['sin_day'] = np.sin(2 * np.pi * df['day_of_year'] / 365.0)
+df['cos_day'] = np.cos(2 * np.pi * df['day_of_year'] / 365.0)
+
+# We will use these 4 features for the LSTM:
+# temp_max, temp_min, sin_day, cos_day
+features = df[['temp_max', 'temp_min', 'sin_day', 'cos_day']].values
+
+#Scalers
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = MinMaxScaler()
+features_scaled = scaler.fit_transform(features)
+
+#Sequencing
+def make_sequences(data, window=10):
+    X, y = [], []
+    for i in range(window, len(data)):
+        X.append(data[i-window:i])   # 10 days of 4 features
+        y.append(data[i][:2])        # predict temp_max, temp_min only
+    return np.array(X), np.array(y)
+
+WINDOW = 365
+X, y = make_sequences(features_scaled, WINDOW)
+
+#Train eval split
+train_size = int(len(X) * 0.7)
+val_size   = int(len(X) * 0.15)
+
+X_train, y_train = X[:train_size], y[:train_size]
+X_val, y_val     = X[train_size:train_size+val_size], y[train_size:train_size+val_size]
+X_test, y_test   = X[train_size+val_size:], y[train_size+val_size:]
+
+#LSTM 
+from keras.models import Sequential
+from keras.layers import LSTM, Dense, Dropout
+
+model = Sequential()
+model.add(LSTM(64, return_sequences=True, input_shape=(WINDOW, 4)))
+model.add(Dropout(0.2))
+
+model.add(LSTM(64))
+model.add(Dropout(0.2))
+
+# Predict 2 values: temp_max and temp_min
+model.add(Dense(2))
+
+model.compile(optimizer='adam', loss='mse')
+
+model.summary()
+
+#Train Model
+history = model.fit(
+    X_train, y_train,
+    validation_data=(X_val, y_val),
+    epochs=30,
+    batch_size=16
+)
+
+# Save Model
+model_path = r"C:\Users\GECross\Downloads\new_weather_lstm_model.h5"
+model.save(model_path)
+print(f"Model saved to: {model_path}")
